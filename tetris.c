@@ -1,73 +1,82 @@
 // ============================================================================
-//         DESAFIO NOVATO - FILA DE PEÇAS FUTURAS (TETRIS STACK)
+//     DESAFIO AVENTUREIRO - FILA CIRCULAR COM PILHA DE RESERVA (TETRIS STACK)
 // ============================================================================
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h> // Para a semente do rand() mudar a cada jogo
+#include <time.h>
 
-#define MAX 5
+#define MAX_FILA 5
+#define MAX_PILHA 3
 
-// --- Estrutura da Peça
-// Aqui criamos a nossa struct para guardar os dados de cada peca do Tetris
+// --- Estrutura da Peça ---
+// Aqui eu criei a struct basica para guardar os dados de cada peca do jogo
 typedef struct {
-    char nome; // Vai guardar a letra da forma: 'I', 'O', 'T', 'L'
-    int id;    // Numero unico sequencial da peca
+    char nome; // Guarda a letra ('I', 'O', 'T', 'L')
+    int id;    // Guarda o numero sequencial unico da peca
 } Peca;
 
-// --- Estrutura da Fila Circular
-// Aqui eu crio a struct para controlar a nossa fila circular de pecas
+// --- Estrutura da Fila Circular ---
+// Aqui eu fiz a struct para controlar a nossa fila de pecas futuras
 typedef struct {
-    Peca itens[MAX]; // Vetor fixo de 5 posicoes para as pecas futuras
-    int inicio;      // Indica onde esta a peca da frente (proxima a ser jogada)
-    int fim;         // Indica onde esta a ultima peca que entrou
-    int total;       // Contador absoluto de quantas pecas estao na fila agora
-} FilaPecas;
+    Peca itens[MAX_FILA];
+    int inicio;
+    int fim;
+    int total;
+} FilaCircular;
 
-// --- Variaveis Globais de Controle
-FilaPecas fila;
-int contador_id = 0; // Guarda o proximo ID unico a ser gerado
+// --- Estrutura da Pilha Linear ---
+// Aqui eu montei a struct para controlar as pecas que o jogador deixar guardadas
+typedef struct {
+    Peca itens[MAX_PILHA];
+    int topo; // Indica qual e a posicao da peca mais alta na pilha
+} PilhaLinear;
 
-// --- Protótipos das Funções
+// --- Variaveis Globais ---
+FilaCircular fila;
+PilhaLinear pilha;
+int contador_id = 0; // Controla o gerador de IDs sequenciais
+
+// --- Protótipos das Funções ---
 void limparBuffer();
-void inicializarFila();
+void inicializarEstruturas();
 Peca gerarPeca();
 void jogarPeca();
-void inserirNovaPeca();
-void exibirFila();
+void reservarPeca();
+void usarPecaReservada();
+void exibirPainel();
 
-// --- Funcao Principal (main)
+// --- Funcao Principal (main) ---
 int main() {
     int opcao;
 
-    // Inicializa o gerador de numeros aleatorios com base no tempo atual
+    // Aqui eu coloco a semente do rand() baseada no relogio do PC
     srand((unsigned int)time(NULL));
 
-    // Passo obrigatorio: zera os indices e contadores da fila
-    inicializarFila();
+    // Aqui eu chamo a funcao para zerar todos os indices e deixar tudo limpo
+    inicializarEstruturas();
 
-    printf("=================================================\n");
-    printf("           TETRIS STACK - FILA DE PEÇAS          \n");
-    printf("=================================================\n");
-
-    // Requisito: O jogo comeca preenchendo automaticamente as 5 vagas da fila
-    for (int i = 0; i < MAX; i++) {
+    // Requisito: Aqui eu preencho automaticamente as 5 pecas iniciais da fila futura
+    for (int i = 0; i < MAX_FILA; i++) {
         fila.itens[i] = gerarPeca();
         fila.total++;
     }
-    // Ajustamos o ponteiro do fim para a ultima peca inserida (indice 4)
-    fila.fim = MAX - 1;
+    fila.fim = MAX_FILA - 1; // Deixo o ponteiro do fim travado na ultima peca
 
-    // Laco principal do jogo
+    printf("=================================================\n");
+    printf("         TETRIS STACK - MÓDULO INTERMEDIÁRIO     \n");
+    printf("=================================================\n");
+
     do {
-        exibirFila(); // Mostra o painel com as pecas atuais
+        exibirPainel(); // Aqui eu desenho a fila e a pilha na tela
 
-        printf("\nOpcoes de acao:\n");
-        printf("1 - Jogar peca (dequeue)\n");
-        printf("2 - Inserir nova peca (enqueue)\n");
+        printf("\nOpcoes de Acao:\n");
+        printf("1 - Jogar peca\n");
+        printf("2 - Reservar peca\n");
+        printf("3 - Usar peca reservada\n");
         printf("0 - Sair\n");
-        printf("Escolha um comando: ");
+        printf("Escolha uma opcao: ");
         scanf("%d", &opcao);
         limparBuffer();
 
@@ -76,13 +85,16 @@ int main() {
                 jogarPeca();
                 break;
             case 2:
-                inserirNovaPeca();
+                reservarPeca();
+                break;
+            case 3:
+                usarPecaReservada();
                 break;
             case 0:
-                printf("\nFechando o Tetris Stack. Ate logo!\n");
+                printf("\nFechando o inventario do jogo. Ate logo!\n");
                 break;
             default:
-                printf("\n❌ Comando invalido! Tente novamente.\n");
+                printf("\n❌ Opcao invalida! Tente novamente.\n");
         }
     } while (opcao != 0);
 
@@ -94,83 +106,117 @@ void limparBuffer() {
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
-// --- Implementacao das Funcoes
+// --- Implementacao das Funcoes ---
 
-// Aqui eu zero os indices e o total de controle para limpar a memoria da fila
-void inicializarFila() {
+void inicializarEstruturas() {
+    // Aqui eu zero os controles da fila circular
     fila.inicio = 0;
     fila.fim = 0;
     fila.total = 0;
+
+    // Aqui eu zero a pilha linear definindo o topo como -1 (indica pilha vazia)
+    pilha.topo = -1;
 }
 
-// Funcao automatica que escolhe uma letra aleatoria e coloca um ID sequencial na peca
 Peca gerarPeca() {
     Peca nova;
     char formatos[] = {'I', 'O', 'T', 'L'};
+    int sorteio = rand() % 4;
     
-    // Sorteia um indice de 0 a 3 do vetor de formatos
-    int indice_sorteio = rand() % 4;
-    
-    nova.nome = formatos[indice_sorteio];
+    nova.nome = formatos[sorteio];
     nova.id = contador_id;
     
-    contador_id++; // Aumenta o ID global para a proxima peca ganhar um numero novo
+    contador_id++; // Aqui eu somo 1 no ID global para a proxima peca ganhar um numero novo
     return nova;
 }
 
-// Funcao que faz o dequeue (remove a peca da frente da fila para jogar no tabuleiro)
+// Oopcao 1: Faz o dequeue na fila para jogar no tabuleiro
 void jogarPeca() {
-    // Validação obrigatória: Se a fila estiver vazia, nao ha o que jogar
     if (fila.total == 0) {
         printf("\n❌ Erro: Nao ha pecas na fila para jogar!\n");
         return;
     }
 
-    // Captura os dados da peca que esta saindo da frente
-    Peca peca_jogada = fila.itens[fila.inicio];
-    printf("\n🕹️ Voce jogou a peca [%c %d] no tabuleiro!\n", peca_jogada.nome, peca_jogada.id);
+    // Aqui eu pego o elemento da frente da fila
+    Peca peca_saida = fila.itens[fila.inicio];
+    printf("\n🕹️ Voce jogou a peca [%c %d] no tabuleiro!\n", peca_saida.nome, peca_saida.id);
 
-    // Aqui aplicamos a logica circular para avancar o inicio da fila
-    fila.inicio = (fila.inicio + 1) % MAX;
-    
-    // Tiramos 1 do total porque agora a fila tem uma peca a menos
+    // Aqui eu aplico o operador modulo para girar o inicio da fila de forma circular
+    fila.inicio = (fila.inicio + 1) % MAX_FILA;
     fila.total--;
-}
 
-// Funcao que faz o enqueue (adiciona uma peca gerada de forma automatica no fim da fila)
-void inserirNovaPeca() {
-    // Validação obrigatória: Se a fila estiver cheia, nao podemos inserir mais
-    if (fila.total == MAX) {
-        printf("\n❌ Erro: Fila cheia! Jogue uma peca antes de adicionar outra.\n");
-        return;
-    }
-
-    // Aqui eu aplico o operador modulo (%) para calcular a proxima posicao de fim de forma circular
-    fila.fim = (fila.fim + 1) % MAX;
-    
-    // O sistema gera a peca automaticamente e joga na posicao de fim calculada
+    // Requisito: Aqui eu coloco uma peca nova automaticamente no final da fila para repor
+    fila.fim = (fila.fim + 1) % MAX_FILA;
     fila.itens[fila.fim] = gerarPeca();
-    
-    // Aumentamos o total de pecas ativas
     fila.total++;
-    printf("\n➕ Nova peca [%c %d] entrou no fim da fila de espera.\n", fila.itens[fila.fim].nome, fila.itens[fila.fim].id);
 }
 
-// Funcao que percorre o vetor de forma circular respeitando a ordem FIFO real
-void exibirFila() {
-    printf("\n--- FILA DE PEÇAS FUTURAS ---\n");
+// Opcao 2: Move a peca da frente da fila para o topo da pilha
+void reservarPeca() {
+    // Aqui eu testo se a pilha ja estourou a capacidade de 3 slots
+    if (pilha.topo >= MAX_PILHA - 1) {
+        printf("\n❌ Erro: Pilha de reserva cheia! Use uma peca antes de guardar outra.\n");
+        return;
+    }
     if (fila.total == 0) {
-        printf("[ Fila Vazia ]\n");
+        printf("\n❌ Erro: Nao ha pecas na fila para reservar!\n");
         return;
     }
 
-    // Aqui fazemos a varredura circular: comeca no 'inicio' e roda ate completar o 'total' de itens salvos
-    int idx = fila.inicio;
-    for (int i = 0; i < fila.total; i++) {
-        printf("[%c %d] ", fila.itens[idx].nome, fila.itens[idx].id);
-        
-        // Faz o indice rodar de forma circular para nao estourar o tamanho do vetor
-        idx = (idx + 1) % MAX;
+    // Aqui eu capturo a peca que esta na frente da fila circular (dequeue)
+    Peca peca_para_reservar = fila.itens[fila.inicio];
+    fila.inicio = (fila.inicio + 1) % MAX_FILA;
+    fila.total--;
+
+    // Aqui eu subo o topo da pilha e coloco a peca la dentro (push)
+    pilha.topo++;
+    pilha.itens[pilha.topo] = peca_para_reservar;
+    printf("\n📦 Peca [%c %d] movida da fila e guardada na reserva!\n", peca_para_reservar.nome, peca_para_reservar.id);
+
+    // Requisito: Aqui eu gero uma peca nova para o fim da fila nao ficar desfalcado
+    fila.fim = (fila.fim + 1) % MAX_FILA;
+    fila.itens[fila.fim] = gerarPeca();
+    fila.total++;
+}
+
+// Opcao 3: Faz o pop no topo da pilha para consumir a peca guardada
+void usarPecaReservada() {
+    // Aqui eu testo se a pilha esta vazia antes de tentar tirar
+    if (pilha.topo == -1) {
+        printf("\n❌ Erro: Nao ha nenhuma peca na reserva para usar!\n");
+        return;
     }
-    printf("\n-----------------------------\n");
+
+    // Aqui eu retiro a peca que estava mais alta na pilha (estilo LIFO)
+    Peca peca_usada = pilha.itens[pilha.topo];
+    pilha.topo--; // Desco o indicador do topo para a posicao de baixo
+
+    printf("\n⚡ Voce ativou e usou a peca reservada [%c %d]!\n", peca_usada.nome, peca_usada.id);
+}
+
+void exibirPainel() {
+    printf("\n=================================================\n");
+    
+    // Varredura circular da fila
+    printf("Fila de pecas:       ");
+    if (fila.total == 0) {
+        printf("[Vazia]");
+    } else {
+        int idx = fila.inicio;
+        for (int i = 0; i < fila.total; i++) {
+            printf("[%c %d] ", fila.itens[idx].nome, fila.itens[idx].id);
+            idx = (idx + 1) % MAX_FILA;
+        }
+    }
+    
+    // Varredura linear da pilha (do topo ate a base)
+    printf("\nPilha de reserva (Topo -> Base): ");
+    if (pilha.topo == -1) {
+        printf("[Vazia]");
+    } else {
+        for (int i = pilha.topo; i >= 0; i--) {
+            printf("[%c %d] ", pilha.itens[i].nome, pilha.itens[i].id);
+        }
+    }
+    printf("\n=================================================\n");
 }
